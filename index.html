@@ -181,7 +181,7 @@ footer a { color:var(--muted); }
         <div class="row2"><label>Prix affiché (€)<input name="prix" inputmode="numeric" required></label><label>Ville<input name="ville"></label></div>
         <label>Description<textarea name="description" rows="3"></textarea></label>
         <label>Équipements<textarea name="equipements" rows="2"></textarea></label>
-        <label>Lien de la photo<input name="photo" type="url" placeholder="https://..."></label>
+        <label>Photo du véhicule<input type="file" name="photofile" accept="image/*"></label>
         <div><button type="submit" class="btn">Publier dans la vitrine</button></div>
         <p class="status" id="addMsg" role="status"></p>
       </form>
@@ -556,12 +556,46 @@ footer a { color:var(--muted); }
       authErr.textContent = 'Code incorrect ou service indisponible. Vérifie le code, ou ouvre le site en ligne (pas le fichier sur ton ordi).';
     });
   });
+  // Réduit la photo (1200 px max, JPEG) pour un envoi rapide
+  function compress(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = reject;
+        img.onload = function () {
+          var s = Math.min(1, 1200 / Math.max(img.width, img.height));
+          var c = document.createElement('canvas');
+          c.width = Math.round(img.width * s);
+          c.height = Math.round(img.height * s);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/jpeg', 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
   addForm.addEventListener('submit', function (e) {
     e.preventDefault();
     var fields = { action: 'add' };
-    new FormData(addForm).forEach(function (val, key) { fields[key] = val; });
-    send(fields, 'Véhicule ajouté.');
-    addForm.reset();
+    new FormData(addForm).forEach(function (val, key) { if (key !== 'photofile') fields[key] = val; });
+    var file = addForm.photofile.files[0];
+    addMsg.textContent = 'Envoi en cours…';
+    var upload = file ? compress(file).then(function (dataUrl) {
+      var body = new URLSearchParams({ action: 'upload', token: TOKEN, data: dataUrl });
+      return fetch(SCRIPT_URL, { method: 'POST', body: body }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.url) throw new Error('upload');
+        fields.photo = j.url;
+      });
+    }) : Promise.resolve();
+    upload.then(function () {
+      send(fields, 'Véhicule ajouté.');
+      addForm.reset();
+    }).catch(function () {
+      addMsg.textContent = 'Échec de l’envoi de la photo. Réessaie.';
+    });
   });
 
   loadStock();
