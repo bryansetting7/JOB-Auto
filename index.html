@@ -132,6 +132,18 @@ footer a { color:var(--muted); }
 .vtitle { font-size:clamp(32px,5vw,48px); }
 .vdesc { font-size:17px; white-space:pre-line; max-width:none; }
 .vclose { justify-self:end; background:none; border:1px solid var(--line); color:var(--fg); padding:10px 16px; cursor:pointer; font:inherit; }
+@media (max-width:600px) {
+  .band { padding:40px 20px; }
+  .hero { padding-block:40px 28px; gap:28px; }
+  .hero h1 { font-size:clamp(38px, 11vw, 52px); }
+  .nav { gap:14px; font-size:13px; flex-wrap:wrap; }
+  .ptab { display:block; text-align:center; }
+  .row2 { grid-template-columns:1fr; }
+  .stock { grid-template-columns:1fr; }
+  .vmain { max-height:50vh; }
+  .vclose { justify-self:stretch; text-align:center; }
+  .vbox { gap:14px; }
+}
 </style>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Manrope:wght@400;600;700&display=swap">
