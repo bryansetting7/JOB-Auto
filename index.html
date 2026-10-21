@@ -122,6 +122,16 @@ footer a { color:var(--muted); }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } .fstep.active { animation:none; } }
 @media (prefers-reduced-motion: no-preference) { .hero h1 { animation:rise .8s ease-out both; } @keyframes rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } } }
 [hidden]{display:none !important}
+.vmodal { position:fixed; inset:0; background:rgba(0,0,0,.94); display:none; overflow-y:auto; z-index:100; padding:24px 16px; }
+.vmodal.on { display:block; }
+.vbox { max-width:960px; margin:0 auto; display:grid; gap:18px; }
+.vmain { width:100%; max-height:70vh; object-fit:contain; background:#000; }
+.vthumbs { display:flex; gap:8px; overflow-x:auto; }
+.vthumb { width:110px; height:80px; object-fit:cover; cursor:pointer; opacity:.6; flex:0 0 auto; }
+.vthumb:hover { opacity:1; }
+.vtitle { font-size:clamp(32px,5vw,48px); }
+.vdesc { font-size:17px; white-space:pre-line; max-width:none; }
+.vclose { justify-self:end; background:none; border:1px solid var(--line); color:var(--fg); padding:10px 16px; cursor:pointer; font:inherit; }
 </style>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Manrope:wght@400;600;700&display=swap">
@@ -181,7 +191,7 @@ footer a { color:var(--muted); }
         <div class="row2"><label>Prix affiché (€)<input name="prix" inputmode="numeric" required></label><label>Ville<input name="ville"></label></div>
         <label>Description<textarea name="description" rows="3"></textarea></label>
         <label>Équipements<textarea name="equipements" rows="2"></textarea></label>
-        <label>Photo du véhicule<input type="file" name="photofile" accept="image/*"></label>
+        <label>Photo du véhicule<input type="file" name="photofile" accept="image/*" multiple></label>
         <div><button type="submit" class="btn">Publier dans la vitrine</button></div>
         <p class="status" id="addMsg" role="status"></p>
       </form>
@@ -478,14 +488,63 @@ footer a { color:var(--muted); }
     if (text != null) n.textContent = text;
     return n;
   }
+  function photosOf(v) {
+    return String(v['Photo'] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+  var modal = null;
+  function closeVehicle() {
+    if (!modal) return;
+    modal.classList.remove('on');
+    document.body.style.overflow = '';
+  }
+  function openVehicle(v) {
+    var photos = photosOf(v);
+    if (!modal) {
+      modal = el('div', 'vmodal');
+      modal.addEventListener('click', function (e) { if (e.target === modal) closeVehicle(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeVehicle(); });
+      document.body.appendChild(modal);
+    }
+    modal.textContent = '';
+    var box = el('div', 'vbox');
+    var close = el('button', 'vclose', 'Fermer ✕');
+    close.type = 'button';
+    close.addEventListener('click', closeVehicle);
+    box.appendChild(close);
+    var main = el('img', 'vmain');
+    main.alt = (v['Marque'] || '') + ' ' + (v['Modèle'] || '');
+    if (photos.length) main.src = photos[0]; else main.hidden = true;
+    box.appendChild(main);
+    if (photos.length > 1) {
+      var thumbs = el('div', 'vthumbs');
+      photos.forEach(function (u) {
+        var t = el('img', 'vthumb');
+        t.src = u;
+        t.alt = '';
+        t.addEventListener('click', function () { main.src = u; });
+        thumbs.appendChild(t);
+      });
+      box.appendChild(thumbs);
+    }
+    box.appendChild(el('h2', 'vtitle', (v['Marque'] || '') + ' ' + (v['Modèle'] || '') + (v['Version'] ? ' ' + v['Version'] : '')));
+    box.appendChild(el('div', 'pr', v['Prix'] ? v['Prix'] + ' €' : 'Prix sur demande'));
+    box.appendChild(el('div', 'sm', [v['Année'], v['Km'] ? v['Km'] + ' km' : '', v['Carburant'], v['Boîte'], v['Ville']].filter(Boolean).join(' · ')));
+    if (v['Description']) box.appendChild(el('p', 'vdesc', v['Description']));
+    if (v['Équipements']) box.appendChild(el('p', 'vdesc', 'Équipements : ' + v['Équipements']));
+    modal.appendChild(box);
+    modal.classList.add('on');
+    document.body.style.overflow = 'hidden';
+  }
   function renderStock(items) {
     stock.textContent = '';
     vempty.hidden = items.length > 0;
     items.forEach(function (v) {
       var card = el('article', 'vcard');
-      if (v['Photo']) {
+      card.style.cursor = 'pointer';
+      var photos = photosOf(v);
+      if (photos.length) {
         var img = el('img');
-        img.src = v['Photo'];
+        img.src = photos[0];
         img.alt = (v['Marque'] || '') + ' ' + (v['Modèle'] || '');
         img.loading = 'lazy';
         card.appendChild(img);
@@ -495,27 +554,8 @@ footer a { color:var(--muted); }
       b.appendChild(el('div', 'sm', [v['Version'], v['Année'], v['Km'] ? v['Km'] + ' km' : '', v['Carburant'], v['Boîte']].filter(Boolean).join(' · ')));
       b.appendChild(el('div', 'pr', v['Prix'] ? v['Prix'] + ' €' : 'Prix sur demande'));
       if (v['Ville']) b.appendChild(el('div', 'sm', v['Ville']));
-      if (v['Description'] || v['Équipements']) {
-        var more = el('div', 'vmore');
-        more.hidden = true;
-        more.style.marginTop = '14px';
-        if (v['Description']) more.appendChild(el('p', 'sm', v['Description']));
-        if (v['Équipements']) {
-          var eq = el('p', 'sm', 'Équipements : ' + v['Équipements']);
-          eq.style.marginTop = '10px';
-          more.appendChild(eq);
-        }
-        var toggle = el('button', 'ghostbtn', 'Voir la fiche');
-        toggle.type = 'button';
-        toggle.style.marginTop = '16px';
-        toggle.addEventListener('click', function () {
-          more.hidden = !more.hidden;
-          toggle.textContent = more.hidden ? 'Voir la fiche' : 'Réduire';
-        });
-        b.appendChild(toggle);
-        b.appendChild(more);
-      }
       card.appendChild(b);
+      card.addEventListener('click', function () { openVehicle(v); });
       stock.appendChild(card);
     });
   }
@@ -600,20 +640,26 @@ footer a { color:var(--muted); }
     e.preventDefault();
     var fields = { action: 'add' };
     new FormData(addForm).forEach(function (val, key) { if (key !== 'photofile') fields[key] = val; });
-    var file = addForm.photofile.files[0];
-    addMsg.textContent = 'Envoi en cours…';
-    var upload = file ? compress(file).then(function (dataUrl) {
-      var body = new URLSearchParams({ action: 'upload', token: TOKEN, data: dataUrl });
-      return fetch(SCRIPT_URL, { method: 'POST', body: body }).then(function (r) { return r.json(); }).then(function (j) {
-        if (!j.url) throw new Error('upload');
-        fields.photo = j.url;
+    var files = Array.prototype.slice.call(addForm.photofile.files);
+    addMsg.textContent = files.length ? 'Envoi des photos en cours…' : 'Envoi en cours…';
+    var upload = files.reduce(function (chain, file) {
+      return chain.then(function (urls) {
+        return compress(file).then(function (dataUrl) {
+          var body = new URLSearchParams({ action: 'upload', token: TOKEN, data: dataUrl });
+          return fetch(SCRIPT_URL, { method: 'POST', body: body }).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j.url) throw new Error('upload');
+            urls.push(j.url);
+            return urls;
+          });
+        });
       });
-    }) : Promise.resolve();
-    upload.then(function () {
+    }, Promise.resolve([]));
+    upload.then(function (urls) {
+      fields.photo = urls.join(',');
       send(fields, 'Véhicule ajouté.');
       addForm.reset();
     }).catch(function () {
-      addMsg.textContent = 'Échec de l’envoi de la photo. Réessaie.';
+      addMsg.textContent = 'Échec de l’envoi d’une photo. Réessaie.';
     });
   });
 
