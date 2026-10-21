@@ -495,7 +495,26 @@ footer a { color:var(--muted); }
       b.appendChild(el('div', 'sm', [v['Version'], v['Année'], v['Km'] ? v['Km'] + ' km' : '', v['Carburant'], v['Boîte']].filter(Boolean).join(' · ')));
       b.appendChild(el('div', 'pr', v['Prix'] ? v['Prix'] + ' €' : 'Prix sur demande'));
       if (v['Ville']) b.appendChild(el('div', 'sm', v['Ville']));
-      if (v['Description']) b.appendChild(el('p', 'sm', v['Description']));
+      if (v['Description'] || v['Équipements']) {
+        var more = el('div', 'vmore');
+        more.hidden = true;
+        more.style.marginTop = '14px';
+        if (v['Description']) more.appendChild(el('p', 'sm', v['Description']));
+        if (v['Équipements']) {
+          var eq = el('p', 'sm', 'Équipements : ' + v['Équipements']);
+          eq.style.marginTop = '10px';
+          more.appendChild(eq);
+        }
+        var toggle = el('button', 'ghostbtn', 'Voir la fiche');
+        toggle.type = 'button';
+        toggle.style.marginTop = '16px';
+        toggle.addEventListener('click', function () {
+          more.hidden = !more.hidden;
+          toggle.textContent = more.hidden ? 'Voir la fiche' : 'Réduire';
+        });
+        b.appendChild(toggle);
+        b.appendChild(more);
+      }
       card.appendChild(b);
       stock.appendChild(card);
     });
