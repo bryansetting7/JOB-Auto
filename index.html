@@ -144,6 +144,10 @@ footer a { color:var(--muted); }
   .vclose { justify-self:stretch; text-align:center; }
   .vbox { gap:14px; }
 }
+.thumbWrap { position:relative; width:96px; height:72px; }
+.thumbWrap img { width:100%; height:100%; object-fit:cover; display:block; }
+.thumbDel { position:absolute; top:4px; right:4px; width:24px; height:24px; background:rgba(0,0,0,.75); color:#fff; border:0; cursor:pointer; font-size:12px; }
+#editPhotos { display:flex; gap:8px; flex-wrap:wrap; }
 </style>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Manrope:wght@400;600;700&display=swap">
@@ -203,8 +207,9 @@ footer a { color:var(--muted); }
         <div class="row2"><label>Prix affiché (€)<input name="prix" inputmode="numeric" required></label><label>Ville<input name="ville"></label></div>
         <label>Description<textarea name="description" rows="3"></textarea></label>
         <label>Équipements<textarea name="equipements" rows="2"></textarea></label>
-        <label>Photo du véhicule<input type="file" name="photofile" accept="image/*" multiple></label>
-        <div><button type="submit" class="btn">Publier dans la vitrine</button></div>
+        <label>Photo du véhicule (plusieurs possibles)<input type="file" name="photofile" accept="image/*" multiple></label>
+        <div id="editPhotos"></div>
+        <div><button type="submit" class="btn" id="addBtn">Publier dans la vitrine</button> <button type="button" class="ghostbtn" id="cancelEdit" hidden>Annuler la modification</button></div>
         <p class="status" id="addMsg" role="status"></p>
       </form>
       <h3 style="margin-top:48px;font-size:30px">Véhicules</h3>
@@ -584,6 +589,48 @@ footer a { color:var(--muted); }
   var addForm = document.getElementById('addForm');
   var addMsg = document.getElementById('addMsg');
 
+  var editing = null;
+  var editPhotos = [];
+  function renderEditPhotos() {
+    var box = document.getElementById('editPhotos');
+    box.textContent = '';
+    editPhotos.forEach(function (u, i) {
+      var w = el('div', 'thumbWrap');
+      var im = el('img');
+      im.src = u;
+      im.alt = '';
+      var x = el('button', 'thumbDel', '✕');
+      x.type = 'button';
+      x.addEventListener('click', function () { editPhotos.splice(i, 1); renderEditPhotos(); });
+      w.appendChild(im);
+      w.appendChild(x);
+      box.appendChild(w);
+    });
+  }
+  function startEdit(v) {
+    editing = v;
+    editPhotos = photosOf(v);
+    var map = { marque: 'Marque', modele: 'Modèle', version: 'Version', annee: 'Année', km: 'Km', carburant: 'Carburant', boite: 'Boîte', prix: 'Prix', ville: 'Ville', description: 'Description', equipements: 'Équipements' };
+    Object.keys(map).forEach(function (name) { addForm.elements[name].value = v[map[name]] || ''; });
+    addForm.photofile.value = '';
+    renderEditPhotos();
+    document.getElementById('addBtn').textContent = 'Enregistrer les modifications';
+    document.getElementById('cancelEdit').hidden = false;
+    addMsg.textContent = 'Modification de : ' + (v['Marque'] || '') + ' ' + (v['Modèle'] || '');
+    addForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function stopEdit() {
+    editing = null;
+    editPhotos = [];
+    addForm.reset();
+    renderEditPhotos();
+    document.getElementById('addBtn').textContent = 'Publier dans la vitrine';
+    document.getElementById('cancelEdit').hidden = true;
+  }
+  document.getElementById('cancelEdit').addEventListener('click', function () {
+    stopEdit();
+    addMsg.textContent = '';
+  });
   function renderAdmin(items) {
     var list = document.getElementById('adminList');
     list.textContent = '';
@@ -591,13 +638,23 @@ footer a { color:var(--muted); }
     items.forEach(function (v) {
       var row = el('div', 'arow');
       row.appendChild(el('span', '', (v['Marque'] || '') + ' ' + (v['Modèle'] || '') + ' · ' + v['Statut']));
+      var edit = el('button', 'ghostbtn', 'Modifier');
+      edit.type = 'button';
+      edit.addEventListener('click', function () { startEdit(v); });
       var btn = el('button', 'ghostbtn', v['Statut'] === 'Disponible' ? 'Marquer vendu' : 'Remettre en ligne');
       btn.type = 'button';
       btn.addEventListener('click', function () {
         var next = v['Statut'] === 'Disponible' ? 'Vendu' : 'Disponible';
         send({ action: 'status', id: v['ID'], statut: next }, 'Statut mis à jour.');
       });
+      var del = el('button', 'ghostbtn', 'Supprimer');
+      del.type = 'button';
+      del.addEventListener('click', function () {
+        if (confirm('Supprimer cette annonce ?')) send({ action: 'delete', id: v['ID'] }, 'Annonce supprimée.');
+      });
+      row.appendChild(edit);
       row.appendChild(btn);
+      row.appendChild(del);
       list.appendChild(row);
     });
   }
@@ -650,10 +707,12 @@ footer a { color:var(--muted); }
   }
   addForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    var fields = { action: 'add' };
+    var fields = { action: editing ? 'update' : 'add' };
+    if (editing) fields.id = editing['ID'];
     new FormData(addForm).forEach(function (val, key) { if (key !== 'photofile') fields[key] = val; });
     var files = Array.prototype.slice.call(addForm.photofile.files);
     addMsg.textContent = files.length ? 'Envoi des photos en cours…' : 'Envoi en cours…';
+    var start = editing ? editPhotos.slice() : [];
     var upload = files.reduce(function (chain, file) {
       return chain.then(function (urls) {
         return compress(file).then(function (dataUrl) {
@@ -665,11 +724,11 @@ footer a { color:var(--muted); }
           });
         });
       });
-    }, Promise.resolve([]));
+    }, Promise.resolve(start));
     upload.then(function (urls) {
       fields.photo = urls.join(',');
-      send(fields, 'Véhicule ajouté.');
-      addForm.reset();
+      send(fields, editing ? 'Annonce modifiée.' : 'Véhicule ajouté.');
+      stopEdit();
     }).catch(function () {
       addMsg.textContent = 'Échec de l’envoi d’une photo. Réessaie.';
     });
